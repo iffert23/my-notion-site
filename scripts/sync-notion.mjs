@@ -35,7 +35,7 @@ function titleToSlug(title) {
 // 제외할 페이지(요청: 미팅/교육, 프로젝트 제외)
 function shouldExcludeByTitle(title) {
   const t = String(title || "").trim();
-  return t === "미팅/교육" || t === "프로젝트";
+  return t === "미팅,교육" || t === "프로젝트";
 }
 
 const NOTION_TOKEN = process.env.NOTION_TOKEN;
