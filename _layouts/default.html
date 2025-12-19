@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>
+      {% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}
+    </title>
+    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+    {% seo %}
+  </head>
+
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <a href="{{ '/' | relative_url }}">{{ site.title }}</a>
+        </div>
+
+        <nav class="nav">
+          <div class="nav-section">바로가기</div>
+          <a class="nav-item" href="{{ '/영위키/' | relative_url }}">영위키</a>
+
+          <div class="nav-section">업무</div>
+          <a class="nav-item" href="{{ '/azure/' | relative_url }}">Azure</a>
+          <a class="nav-item" href="{{ '/개념정리/' | relative_url }}">개념정리</a>
+          <a class="nav-item" href="{{ '/미팅-교육/' | relative_url }}">미팅·교육</a>
+          <a class="nav-item" href="{{ '/프로젝트/' | relative_url }}">프로젝트</a>
+
+          <div class="nav-section">OS</div>
+          <a class="nav-item" href="{{ '/linux/' | relative_url }}">Linux</a>
+
+          <div class="nav-section">서적·공부·스터디</div>
+          <a class="nav-item" href="{{ '/메모/' | relative_url }}">메모</a>
+          <a class="nav-item" href="{{ '/엔지니어를-위한-네트워크-입문/' | relative_url }}">네트워크 입문</a>
+          <a class="nav-item" href="{{ '/오픈플로우-SDN/' | relative_url }}">SDN 입문</a>
+          <a class="nav-item" href="{{ '/정보처리기사-필기/' | relative_url }}">정보처리기사</a>
+          <a class="nav-item" href="{{ '/자격증/' | relative_url }}">자격증</a>
+
+          <div class="nav-section">강연·강의·모임</div>
+          <a class="nav-item" href="{{ '/네트워크-기초-이론/' | relative_url }}">네트워크 이론</a>
+          <a class="nav-item" href="{{ '/모임-세미나/' | relative_url }}">모임·세미나</a>
+          <a class="nav-item" href="{{ '/강연-메모/' | relative_url }}">메모</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <div class="content-inner">
+          {% if page.title %}
+            <h1 class="page-title">{{ page.title }}</h1>
+          {% endif %}
+          {{ content }}
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
