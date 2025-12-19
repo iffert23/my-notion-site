@@ -3,103 +3,162 @@ import path from "path";
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 
-const startedAt = Date.now();
-const log = (...args) => console.log(`[sync ${Math.floor((Date.now()-startedAt)/1000)}s]`, ...args);
+function log(...args) {
+  console.log("[sync]", ...args);
+}
 
-const token = process.env.NOTION_TOKEN;
-if (!token) throw new Error("NOTION_TOKEN is missing");
+// "64fbd567186948089d9f01855a0a7954" 처럼 하이픈 없는 값도 들어오므로 정규화
+function normalizeNotionId(id) {
+  if (!id) return null;
 
-const cfg = JSON.parse(fs.readFileSync("notion-sync.json", "utf8"));
-const ROOT = cfg.rootPageId;
-const EX = (cfg.excludeTitles || []).map((x) => String(x));
+  // 사용자가 실수로 "영위키_64fb..." 같은 걸 넣은 케이스 방지
+  // 마지막 32자리 hex만 뽑아냄
+  const m = String(id).match(/[0-9a-fA-F]{32}/);
+  const hex32 = m ? m[0].toLowerCase() : null;
+  if (!hex32) return null;
 
-const notion = new Client({ auth: token });
+  // Notion API는 UUID 형태(하이픈 포함)도 받지만, 32자리도 받습니다.
+  // 여기서는 32자리 그대로 사용(안전)
+  return hex32;
+}
+
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function titleToSlug(title) {
+  // 간단 슬러그(한글도 그대로 폴더/파일명으로 가능하지만, URL 깔끔하게 하려면 변환 추천)
+  // 여기서는 한글 유지 + 공백만 - 처리
+  return String(title).trim().replace(/\s+/g, "-");
+}
+
+// 제외할 페이지(요청: 미팅/교육, 프로젝트 제외)
+function shouldExcludeByTitle(title) {
+  const t = String(title || "").trim();
+  return t === "미팅/교육" || t === "프로젝트";
+}
+
+const NOTION_TOKEN = process.env.NOTION_TOKEN;
+const ROOT_PAGE_ID = normalizeNotionId(process.env.NOTION_ROOT_PAGE_ID);
+
+if (!NOTION_TOKEN) throw new Error("NOTION_TOKEN 이 없습니다. GitHub Secrets에 추가해 주세요.");
+if (!ROOT_PAGE_ID) throw new Error("NOTION_ROOT_PAGE_ID 가 없거나 형식이 잘못되었습니다(32자리 Notion ID 필요).");
+
+const notion = new Client({ auth: NOTION_TOKEN });
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
-const outDir = path.join(process.cwd(), "_docs");
-fs.mkdirSync(outDir, { recursive: true });
+const OUT_DIR = path.join(process.cwd(), "_docs");
+ensureDir(OUT_DIR);
 
-function frontMatter(title) {
-  return `---\nlayout: page\ntitle: ${title}\n---\n\n`;
-}
-
-function slugify(title) {
-  return title
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^\w\-가-힣]/g, "")
-    .toLowerCase();
-}
-
-function shouldExclude(title) {
-  return EX.some((k) => title.includes(k));
-}
-
-log("pages.retrieve", pageId);
 async function getPageTitle(pageId) {
+  // ✅ pageId는 함수 인자로 이미 정의되어 있음 → 여기서부터 로그 가능
+  log("pages.retrieve", pageId);
+
   const page = await notion.pages.retrieve({ page_id: pageId });
-  const props = page.properties || {};
-  const titleProp = Object.values(props).find((p) => p.type === "title");
-  const title = titleProp?.title?.map((t) => t.plain_text).join("") || "Untitled";
+
+  // title 꺼내기(일반 페이지)
+  const titleProp = Object.values(page.properties || {}).find(
+    (p) => p.type === "title"
+  );
+  const title =
+    titleProp?.title?.map((t) => t.plain_text).join("")?.trim() || "Untitled";
+
   return title;
 }
 
-async function listChildPages(blockId) {
-  const pages = [];
-  let cursor = undefined;
-  
-log("blocks.children.list", blockId);
-  while (true) {
-    const res = await notion.blocks.children.list({
-      block_id: blockId,
-      start_cursor: cursor
-    });
+async function exportPageToDocs(pageId, title) {
+  const safeTitle = title || (await getPageTitle(pageId));
+  const slug = titleToSlug(safeTitle);
 
-    for (const b of res.results) {
-      if (b.type === "child_page") {
-        // child_page는 id 자체가 페이지 id로 사용 가능
-        pages.push({ id: b.id, title: b.child_page.title });
-      }
-      // 하위 블록에 children이 있어도 그 안에 child_page가 있을 수 있어서 재귀 탐색
-      if (b.has_children) {
-        const nested = await listChildPages(b.id);
-        pages.push(...nested);
-      }
-    }
+  // ✅ 로그는 slug/경로 계산 후 찍는 게 의미 있음
+  const outPath = path.join(OUT_DIR, `${slug}.md`);
+  log("export", { pageId, title: safeTitle, outPath });
 
-    if (!res.has_more) break;
-    cursor = res.next_cursor;
-  }
-
-  return pages;
-}
-
-async function exportPage(pageId, title) {
   const mdBlocks = await n2m.pageToMarkdown(pageId);
-  const md = n2m.toMarkdownString(mdBlocks).parent;
+  const mdString = n2m.toMarkdownString(mdBlocks);
 
-  const slug = slugify(title);
-  const file = path.join(outDir, `${slug}.md`);
-  fs.writeFileSync(file, frontMatter(title) + md, "utf8");
-  console.log("Wrote", file);
-  return slug;
+  // Jekyll front-matter
+  const frontMatter = `---\nlayout: page\ntitle: "${safeTitle.replaceAll('"', '\\"')}"\n---\n\n`;
+
+  fs.writeFileSync(outPath, frontMatter + mdString.parent, "utf-8");
 }
 
-(async () => {
-  const rootTitle = await getPageTitle(ROOT);
+async function getChildPagesOfRoot(rootPageId) {
+  // 루트 페이지 블록 children 조회
+  log("blocks.children.list", rootPageId);
 
-  // 루트 페이지도 export(대문용으로 쓰고 싶으면 유지)
-  if (!shouldExclude(rootTitle)) {
-    await exportPage(ROOT, rootTitle);
+  const children = await notion.blocks.children.list({
+    block_id: rootPageId,
+    page_size: 100,
+  });
+
+  // child_page / child_database만 추림
+  const pages = [];
+  const dbs = [];
+
+  for (const b of children.results) {
+    if (b.type === "child_page") pages.push(b);
+    if (b.type === "child_database") dbs.push(b);
   }
 
-  const children = await listChildPages(ROOT);
+  return { pages, dbs };
+}
 
-  for (const p of children) {
-    if (shouldExclude(p.title)) {
-      console.log("Skip", p.title);
+async function exportChildDatabase(databaseId) {
+  // ✅ databaseId가 여기서 정의되므로 여기서 로그
+  log("databases.query", databaseId);
+
+  const res = await notion.databases.query({
+    database_id: databaseId,
+    page_size: 100,
+  });
+
+  // DB 안의 각 페이지를 md로 내보내기
+  for (const row of res.results) {
+    const pageId = normalizeNotionId(row.id);
+    if (!pageId) continue;
+
+    const title = await getPageTitle(pageId);
+    if (shouldExcludeByTitle(title)) {
+      log("skip(database row)", { title, pageId });
       continue;
     }
-    await exportPage(p.id, p.title);
+
+    await exportPageToDocs(pageId, title);
   }
-})();
+}
+
+async function main() {
+  log("start", { ROOT_PAGE_ID });
+
+  // 1) 루트 페이지 직속 child_page export
+  const { pages, dbs } = await getChildPagesOfRoot(ROOT_PAGE_ID);
+
+  for (const p of pages) {
+    const pageId = normalizeNotionId(p.id);
+    if (!pageId) continue;
+
+    const title = await getPageTitle(pageId);
+    if (shouldExcludeByTitle(title)) {
+      log("skip(page)", { title, pageId });
+      continue;
+    }
+
+    await exportPageToDocs(pageId, title);
+  }
+
+  // 2) 루트 직속 child_database export
+  for (const d of dbs) {
+    const databaseId = normalizeNotionId(d.id);
+    if (!databaseId) continue;
+
+    await exportChildDatabase(databaseId);
+  }
+
+  log("done");
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
