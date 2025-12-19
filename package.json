@@ -1,9 +1,9 @@
 {
-  "name": "my-notion-site-sync",
+  "name": "my-notion-site",
   "private": true,
   "type": "module",
   "dependencies": {
     "@notionhq/client": "^2.2.15",
-    "notion-to-md": "^3.1.1"
+    "notion-to-md": "^3.1.9"
   }
 }
