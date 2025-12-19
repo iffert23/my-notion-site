@@ -26,3 +26,7 @@ jobs:
           git add _docs
           git commit -m "Sync from Notion" || echo "No changes"
           git push
+      - run: node scripts/sync-notion.mjs
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_ROOT_PAGE_ID: ${{ secrets.NOTION_ROOT_PAGE_ID }}
