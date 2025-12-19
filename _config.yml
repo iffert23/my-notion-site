@@ -1,3 +1,8 @@
 title: Wiki
-markdown: kramdown
 theme: minima
+markdown: kramdown
+
+collections:
+  docs:
+    output: true
+    permalink: /:name/
