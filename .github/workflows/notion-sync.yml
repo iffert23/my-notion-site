@@ -14,19 +14,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          
+
       - run: npm install
-      - run: node scripts/sync-notion.mjs
+
+      - name: Sync Notion to _docs
+        run: node scripts/sync-notion.mjs
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_ROOT_PAGE_ID: ${{ secrets.NOTION_ROOT_PAGE_ID }}
 
-      - run: |
+      - name: Commit & Push
+        run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add _docs
           git commit -m "Sync from Notion" || echo "No changes"
           git push
-      - run: node scripts/sync-notion.mjs
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_ROOT_PAGE_ID: ${{ secrets.NOTION_ROOT_PAGE_ID }}
