@@ -1,5 +1,5 @@
 title: Wiki
-theme: minima
+theme: jekyll-theme-cayman
 markdown: kramdown
 
 collections:
