@@ -3,6 +3,9 @@ import path from "path";
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 
+const startedAt = Date.now();
+const log = (...args) => console.log(`[sync ${Math.floor((Date.now()-startedAt)/1000)}s]`, ...args);
+
 const token = process.env.NOTION_TOKEN;
 if (!token) throw new Error("NOTION_TOKEN is missing");
 
@@ -32,6 +35,7 @@ function shouldExclude(title) {
   return EX.some((k) => title.includes(k));
 }
 
+log("pages.retrieve", pageId);
 async function getPageTitle(pageId) {
   const page = await notion.pages.retrieve({ page_id: pageId });
   const props = page.properties || {};
@@ -43,7 +47,8 @@ async function getPageTitle(pageId) {
 async function listChildPages(blockId) {
   const pages = [];
   let cursor = undefined;
-
+  
+log("blocks.children.list", blockId);
   while (true) {
     const res = await notion.blocks.children.list({
       block_id: blockId,
