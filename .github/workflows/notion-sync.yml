@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 20
           
-      - run: npm ci
+      - run: npm install
       - run: node scripts/sync-notion.mjs
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
